@@ -12,7 +12,7 @@
 opt=$1
 # Change this parameter to your own path which Jenkins.war is located.
 DIR=$HOME/tmp/jenkins
-export JENKINS_HOME=~/.jenkins
+export JENKINS_HOME=$HOME/.jenkins
 export HTTP_PORT=8000
 
 [ $# -ne 1 ] && { echo "Usage: $0 <restart | start | stop | (check/status) | log>"; exit 1; }
