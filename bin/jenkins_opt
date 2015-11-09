@@ -1,0 +1,82 @@
+#!/bin/bash
+#set -x 
+# 
+# Purpose: manage your Jenkins/Hudson more convenient.
+# Default port is 8080
+#
+# Author: created by Bob on 2010-05-05, 1st edition
+#
+# Parameters: See usage.
+#
+
+opt=$1
+# Change this parameter to your own path which Jenkins.war is located.
+DIR=$HOME/tmp/jenkins
+export JENKINS_HOME=~/.jenkins
+export HTTP_PORT=8000
+
+[ $# -ne 1 ] && { echo "Usage: $0 <restart | start | stop | (check/status) | log>"; exit 1; }
+echo -e "\nYou can use Ctrl-C to exit...\n"
+
+startCmd()
+{
+    nohup java -jar -Djava.awt.headless=true -XX:PermSize=1024m -XX:MaxPermSize=2048m $DIR/jenkins.war --httpPort=$HTTP_PORT > $DIR/jenkins.log 2>&1 &
+}
+
+stopCmd()
+{
+    kill -9 `ps -ef | grep "[j]ava -jar -Djava" | awk '{print $2}'`
+}
+
+case $opt in
+	restart )
+		echo -e "\nKill the Jenkins PID first..."
+        stopCmd
+		echo -e "Check whether this process has been killed or not..."
+		ps -ef | grep "[j]ava -jar -Djava"
+		if [ $? -eq 0 ]; then
+			echo -e "Not killed...\nCheck it manually...Exit now..."
+			exit 1
+		else
+			echo -e "Process has been killed."
+		fi
+		echo -e "\nRestart the Jenkins server..."
+        startCmd
+		echo -e "Restart completed!\nRun \"jenkins_opt log\" to view the jenkins log..."
+		;;
+	start )
+		echo -e "\nStart the Jenkins server..."
+        startCmd
+		echo -e "Start completed!\nRun \"jenkins_opt log\" to view the jenkins log..."
+		;;
+	stop )
+		echo -e "\nStop the Jenkins server..."
+        stopCmd
+		echo -e "Stop completed!\n"
+		;;
+	check|status )
+		echo -e "\nCheck the Jenkins server..."
+		echo -e "\nProcess is: "
+		ps -ef | grep "[j]ava -jar -Djava"
+		echo -e "\nPID is: "
+		ps -ef | grep "[j]ava -jar -Djava" | awk '{print $2}'
+		echo -e "\n"
+		;;
+	log )
+		if [[ `du -sh $DIR/jenkins.log | awk -F'[MK]' '{print $1}'` > 50 ]]; then
+			echo -e "\n#####################################################################"
+			echo -e "## The jenkins.log file is too big, pls backup it and use a new one ##"
+			echo -e "#####################################################################\n"
+		else 
+			echo -e "\nJenkins log file size is ok..." 
+			du -sh $DIR/jenkins.log
+			echo -e "\n"
+		fi
+		tail -f $DIR/jenkins.log
+		;;
+	* )
+		echo -e "Usage: $0 <restart | start | stop | (check/status)>"
+		exit 1
+		;;
+esac
+

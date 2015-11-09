@@ -1,0 +1,203 @@
+#!/bin/bash
+# jenkins service maintainance
+#
+# Pls run this scripts on ci01(10.125.48.191)
+# jenkins port: 8080
+# jenkins server container: /opt/tomcat7.0.23
+#
+
+#----------------------------------------
+# Preparation
+#----------------------------------------
+# {{{usage
+usage()
+{
+    yellow "\n${pink}Usage: ${blue}$0 ${green}< start | stop | resetart | log | cli | update | upgrade >"
+    yellow "\n\t${brown}WARNING: \tBe very careful to use ${red}update | upgarde ${brown}command if you are not a expert to jenkins\n\n"
+    exit 1
+}
+#----------------------------------------
+# }}}
+
+basedir=`dirname $0`
+[ -f $basedir/log.sh ] && source $basedir/log.sh
+
+[ "$1" = "help" -o "$1" = "-help" -o "$1" = "--help" -o "$1" = "-h" ] && usage
+[ $# -lt 1 ] && usage
+
+type=$1
+
+source $HOME/.bashrc
+
+#sys varibles
+pid="`/sbin/pidof java`"
+war_dir=/root/jenkins/war
+tomcatHome=/opt/tomcat7.0.23
+jenkins_libdir=$tomcatHome/webapps
+jenkins_latest="http://mirrors.jenkins-ci.org/war/latest/jenkins.war"
+
+getpidtmp()
+{
+    pid_tmp="`/sbin/pidof java`"
+}
+
+stop()
+{
+    info_msg "Check pid.\n"
+    getpidtmp
+    if [ x"$pid_tmp" = "x" ]; then
+        error_msg "Jenkins Server not running.\n"
+    else
+        $tomcatHome/bin/shutdown.sh || exit 1
+        sleep 1
+    fi
+
+    getpidtmp
+    if [ "$pid_tmp" = "$pid" ]; then
+        error_msg "Jenkins process not stopped. Force to Kill.\n"
+        kill -9 $pid
+        sleep 1
+        getpidtmp
+        if [ x"$pid_tmp" = "x" ]; then
+            info_msg "Stopped.\n"
+        else
+            exit_msg "Jenkins Still not stopped. pls manually check!\n"
+        fi
+    fi
+    sleep 2
+}
+
+start()
+{
+    getpidtmp
+    if [ "$pid_tmp" ]; then
+        warn_msg "Jenkins Server is running, stop first.\n"
+        stop
+    fi
+    $tomcatHome/bin/startup.sh || exit 1
+    sleep 1
+
+    warn_msg "Check pid.\n"
+    getpidtmp
+    if [ x"$pid_tmp" = "x" ]; then
+        exit_msg "Start process failed, pls check!\n"
+    else
+        info_msg "Started.\n"
+        echo ""
+    fi
+}
+
+case $1 in
+    check|status)
+        ps -ef | grep jenkins | grep -v grep | grep -v bash
+        ;;
+    stop)
+        yellow "\n***********************************\n"
+        info_msg "1. Stop the jenkins process.\n"
+        stop
+        sleep 1
+        ;;
+    start)
+        yellow "\n***********************************\n"
+        info_msg "1. Start the jenkins process.\n"
+        start
+
+        yellow "\n***********************************\n"
+        info_msg "2. Jump to show jenkins logs...\n"
+        green "Use ${pink}Ctrl-C ${green}to exit.\n\n"
+        tail -f $tomcatHome/logs/catalina.out
+        ;;
+    restart)
+        yellow "***********************************\n"
+        info_msg "1. Stop the jenkins process.\n"
+        stop
+
+        yellow "\n***********************************\n"
+        info_msg "\n2. Start the jenkins process.\n"
+        start
+
+        yellow "\n***********************************\n"
+        info_msg "3. Jump to show jenkins logs...\n"
+        green "Use ${pink}Ctrl-C ${green}to exit.\n\n"
+        tail -f $tomcatHome/logs/catalina.out
+        ;;
+    log)
+        blank
+        info_msg "Use ${pink}Ctrl-C ${green}to exit.\n\n"
+        tail -f $tomcatHome/logs/catalina.out
+        ;;
+    cli)
+        java -jar ~/jenkins/jenkins-cli.jar -s http://wwci.taobao.org:8080
+        ;;
+    downgrade)
+        yellow "\n***********************************\n"
+        info_msg "1. Stop jenkins service...\n"
+        getpidtmp
+        if [ x"$pid_tmp" = "x" ]; then
+            error_msg "Jenkins Server not running.\n"
+        else
+            stop
+        fi
+
+        yellow "\n***********************************\n"
+        info_msg "2. Backup current ROOT.war file and ROOT dir\n\n"
+        mv -vf $jenkins_libdir/ROOT.war $war_dir/ROOT.war.latest
+        mv -vf $jenkins_libdir/ROOT $war_dir/ROOT.latest
+
+        yellow "\n***********************************\n"
+        info_msg "3. Restore ROOT.war.bak and ROOT\n\n"
+        [ -f $war_dir/ROOT.war.bak ] && mv -vf $war_dir/ROOT.war.bak $jenkins_libdir/ROOT.war || { echo "ROOT.war.bak not exist"; exit 1; }
+        [ -d $war_dir/ROOT.bak ] && mv -vf $war_dir/ROOT.bak $jenkins_libdir/ROOT || { echo "ROOT.bak not exist"; exit 1; }
+
+        yellow "\n***********************************\n"
+        info_msg "4. Start jenkins service...\n"
+        start
+        sleep 1
+
+        yellow "\n***********************************\n"
+        info_msg "6. Jump to show jenkins logs...\n"
+        green "Use ${pink}Ctrl-C ${green}to exit.\n\n"
+        tail -f $tomcatHome/logs/catalina.out
+        ;;
+    update|upgrade)
+        yellow "\n***********************************\n"
+        info_msg "1. Stop jenkins service...\n"
+        getpidtmp
+        if [ x"$pid_tmp" = "x" ]; then
+            error_msg "Jenkins Server not running.\n"
+        else
+            stop
+        fi
+
+        yellow "\n***********************************\n"
+        info_msg "2. Download the lastet jenkins.war\n\n"
+        [ -f $war_dir/jenkins.war ] && rm -vf $war_dir/jenkins.war
+        wget $jenkins_latest -O $war_dir/jenkins.war
+
+        yellow "\n***********************************\n"
+        info_msg "3. Backup ROOT/ROOT.war to ROOT.bak/ROOT.war.bak\n\n"
+        [ -f $war_dir/ROOT.war.bak ] && rm -vf $war_dir/ROOT.war.bak
+        mv -vf $jenkins_libdir/ROOT.war $war_dir/ROOT.war.bak
+        [ -d $war_dir/ROOT.bak ] && rm -rf $war_dir/ROOT.bak
+        mv -vf $jenkins_libdir/ROOT $war_dir/ROOT.bak
+
+        yellow "\n***********************************\n"
+        info_msg "4. Update ROOT.war with latest jenkins.war\n\n"
+        cp -vf $war_dir/jenkins.war $jenkins_libdir/ROOT.war
+
+        yellow "\n***********************************\n"
+        info_msg "5. Start jenkins service...\n"
+        start
+        sleep 1
+
+        yellow "\n***********************************\n"
+        info_msg "6. Jump to show jenkins logs...\n"
+        green "Use ${pink}Ctrl-C ${green}to exit.\n\n"
+        tail -f $tomcatHome/logs/catalina.out
+        ;;
+    *)
+        error_msg "Not support.\n"
+        usage
+        ;;
+esac
+
