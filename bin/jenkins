@@ -12,7 +12,7 @@
 # {{{usage
 usage()
 {
-    yellow "\n${pink}Usage: ${blue}$0 ${green}< start | stop | resetart | log | cli | update | upgrade >"
+    yellow "\n${pink}Usage: ${blue}$0 ${green}< start | stop | resetart | log | cli | update | upgrade | download>"
     yellow "\n\t${brown}WARNING: \tBe very careful to use ${red}update | upgarde ${brown}command if you are not a expert to jenkins\n\n"
     exit 1
 }
@@ -159,6 +159,12 @@ case $1 in
         green "Use ${pink}Ctrl-C ${green}to exit.\n\n"
         tail -f $tomcatHome/logs/catalina.out
         ;;
+    download)
+        yellow "\n***********************************\n"
+        info_msg "Will download the latest version, located at: ${red}$war_dir/jenkins.war.latest\n"
+        [ -f $war_dir/jenkins.war.latest ] && rm -vf $war_dir/jenkins.war.latest
+        wget $jenkins_latest -O $war_dir/jenkins.war.latest
+        ;;
     update|upgrade)
         yellow "\n***********************************\n"
         info_msg "1. Stop jenkins service...\n"
@@ -171,8 +177,13 @@ case $1 in
 
         yellow "\n***********************************\n"
         info_msg "2. Download the lastet jenkins.war\n\n"
-        [ -f $war_dir/jenkins.war ] && rm -vf $war_dir/jenkins.war
-        wget $jenkins_latest -O $war_dir/jenkins.war
+        if [ -f $war_dir/jenkins.war.latest ]; then
+            info_msg "latest jenkins.war already exist.\n"
+            cp -vf $war_dir/jenkins.war.latest $war_dir/jenkins.war
+        else
+            [ -f $war_dir/jenkins.war ] && rm -vf $war_dir/jenkins.war
+            wget $jenkins_latest -O $war_dir/jenkins.war
+        fi
 
         yellow "\n***********************************\n"
         info_msg "3. Backup ROOT/ROOT.war to ROOT.bak/ROOT.war.bak\n\n"
